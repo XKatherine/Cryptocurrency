@@ -31,27 +31,24 @@ public class TxHandler {
      */
     public boolean isValidTx(Transaction tx) {
         // IMPLEMENT THIS
-		if(tx==null)
+		if(tx == null)
 			return false;
-		byte[] hash = tx.getHash();
 		ArrayList<UTXO> utxos = new ArrayList<UTXO>();
-		for(int i = 0; i < tx.numOutputs(); i++)
-			utxos.add(new UTXO(hash, i));
 		// Requirement #1
-		for(UTXO u : utxos)
-			if(!utxoPool.contains(u))
-				return false;
 		// Requirement #2
 		double inSum = 0;
-		for(int i = 0; i < tx.numInputs(); i++){
-			UTXO u = new UTXO(tx.getInput(i).prevTxHash, tx.getInput(i).outputIndex);
+		for(Transaction.Input i : tx.getInputs()){
+			UTXO u = new UTXO(i.prevTxHash, i.outputIndex);
+			if(!utxoPool.contains(u))
+				return false;
 			Transaction.Output o = utxoPool.getTxOutput(u);
+			int index = tx.getInputs().indexOf(i);
 			if(o == null)
 				return false;
-			if(!Crypto.verifySignature(o.address, tx.getRawDataToSign(i), tx.getInput(i).signature))
+			if(!Crypto.verifySignature(o.address, tx.getRawDataToSign(index), i.signature))
 				return false;
-			utxos.add(u);
 			inSum += o.value;
+			utxos.add(u);
 		}
 		// Requirement #3
 		Collections.sort(utxos);
@@ -78,15 +75,41 @@ public class TxHandler {
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
         // IMPLEMENT THIS
-		ArrayList<Transaction> txs = new ArrayList<Transaction>();
-		for(Transaction tx : possibleTxs)
-			if(isValidTx(tx)){
-				for(Transaction.Input i : tx.getInputs())
-					utxoPool.removeUTXO(new UTXO(i.prevTxHash, i.outputIndex));
-				txs.add(tx);
-			}
-		Transaction[] retTxs = new Transaction[txs.size()];
-		retTxs = txs.toArray(retTxs);
-		return retTxs;
+		if(possibleTxs == null)
+			return null;
+		return handleTxs(possibleTxs, 0);
     }
+
+	public Transaction[] handleTxs(Transaction[] possibleTxs, int cnt){
+		if(cnt++ == possibleTxs.length)
+			return null;
+		Transaction tx = possibleTxs[cnt];
+		if(!isValidTx(tx))
+			return handleTxs(possibleTxs, cnt);
+		//Not select this transaction
+		Transaction[] ret1 = handleTxs(possibleTxs, cnt);
+
+		//Select this transaction
+		UTXOPool cpy = new UTXOPool(utxoPool);
+		for(Transaction.Input i : tx.getInputs())
+			utxoPool.removeUTXO(new UTXO(i.prevTxHash, i.outputIndex));
+		Transaction[] retu = handleTxs(possibleTxs, cnt);
+		Transaction[] ret2 = null;
+		if(retu == null)
+			ret2 = new Transaction[]{tx};
+		else{
+			ret2 = new Transaction[retu.length+1];
+			int k = 0;
+			for(Transaction t : retu)
+				ret2[k++] = t;
+			ret2[k] = tx;
+		}
+		
+		int len2 = ret2.length;
+		int len1 = ret1 == null ? 0 : ret1.length;
+		if(len2 > len1)
+			return ret2;
+		utxoPool = cpy;
+		return ret1;
+	}
 }
