@@ -78,26 +78,25 @@ public class TxHandler {
 		Transaction[] ret = new Transaction[0];
 		if(possibleTxs == null || possibleTxs.length == 0)
 			return ret;
-		return handleTxs(possibleTxs, 0);
+		return handleTxs(possibleTxs, 0, this);
     }
 
-	public Transaction[] handleTxs(Transaction[] possibleTxs, int cnt){
+	public Transaction[] handleTxs(Transaction[] possibleTxs, int cnt, TxHandler th){
 		Transaction[] ret = new Transaction[0];
-		if(possibleTxs == null || possibleTxs.length == 0)
-			return ret;
 		if(cnt >= possibleTxs.length)
 			return ret;
 		Transaction tx = possibleTxs[cnt];
 		if(!isValidTx(tx))
-			return handleTxs(possibleTxs, cnt+1);
+			return handleTxs(possibleTxs, cnt+1, th);
 		//Not select this transaction
-		Transaction[] ret1 = handleTxs(possibleTxs, cnt+1);
+		Transaction[] ret1 = handleTxs(possibleTxs, cnt+1, th);
 
 		//Select this transaction
 		UTXOPool cpy = utxoPool;
 		for(Transaction.Input i : tx.getInputs())
-			utxoPool.removeUTXO(new UTXO(i.prevTxHash, i.outputIndex));
-		Transaction[] retu = handleTxs(possibleTxs, cnt+1);
+			cpy.removeUTXO(new UTXO(i.prevTxHash, i.outputIndex));
+		TxHandler newTh = new TxHandler(cpy);
+		Transaction[] retu = handleTxs(possibleTxs, cnt+1, newTh);
 		Transaction[] ret2 = null;
 		if(retu == null || retu.length == 0)
 			ret2 = new Transaction[]{tx};
@@ -113,7 +112,6 @@ public class TxHandler {
 		int len1 = (ret1 == null || ret1.length == 0) ? 0 : ret1.length;
 		if(len2 > len1)
 			return ret2;
-		this.utxoPool = cpy;
 		return ret2;
 	}
 }
